@@ -55,7 +55,10 @@ def get(url):
     with urllib.request.urlopen(req, timeout=25) as response:
         raw = response.read()
         charset = response.headers.get_content_charset()
-    for encoding in [charset, 'utf-8', 'big5', 'cp950']:
+    # Some MoneyDJ sites declare Big5 only in HTML, not HTTP headers.
+    meta = re.search(br'charset\s*=\s*[\"\']?([a-zA-Z0-9_-]+)', raw[:8192], re.I)
+    declared = meta.group(1).decode('ascii') if meta else None
+    for encoding in [declared, charset, 'utf-8', 'big5', 'cp950']:
         if not encoding:
             continue
         try:
@@ -64,6 +67,14 @@ def get(url):
                 return decoded
         except (UnicodeError, LookupError):
             pass
+    # A malformed byte in otherwise valid Big5 must not turn the entire page
+    # into UTF-8 mojibake. Identity validation still rejects damaged titles.
+    for encoding in [declared, charset]:
+        if encoding:
+            try:
+                return raw.decode(encoding, errors='replace')
+            except LookupError:
+                pass
     return raw.decode('utf-8', errors='replace')
 
 def accept(code, day, value, source):
@@ -115,8 +126,8 @@ except Exception as e:
 fund_pages = [
     ('DSE11', 'https://pscnetsecrwd.moneydj.com/w/wr/wr02.djhtm?a=ACDD04-A210003A',
      [r'安聯台灣科技基金'], '近30日淨值'),
-    ('DSE4', 'https://fglife.moneydj.com/w/wr/wr02.djhtm?a=ACDD01-NTDEQ0003',
-     [r'安聯台灣大壩基金', r'A類型', r'新臺幣'], '近90日淨值'),
+    ('DSE4', 'https://mmafund.sinopac.com/w/wr/wr02.djhtm?a=ACDD01-TT1',
+     [r'安聯台灣大壩基金-A類型-新臺幣'], '近30日淨值'),
     ('JFE15', 'https://tw.finance.yahoo.com/fund/F0GBR05VVS%3AFO/history',
      [r'摩根', r'美國科技', r'A股', r'累計'], '30天歷史報價'),
 ]
