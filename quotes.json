@@ -1,22 +1,25 @@
 {
-  "updatedAt": "2026-10-12T22:43:49+08:00",
-  "checkedAt": "2026-10-12T22:43:49+08:00",
+  "updatedAt": "2026-10-12T23:03:53+08:00",
+  "checkedAt": "2026-10-12T23:03:53+08:00",
   "prices": {
     "00757": 146.75,
     "DSE11": 855.86,
-    "JFE15": 158.83
+    "JFE15": 158.83,
+    "DSE4": 348.54
   },
   "priceDates": {
     "00757": "2026-10-08",
     "DSE11": "2026-10-12",
-    "JFE15": "2026-10-09"
+    "JFE15": "2026-10-09",
+    "DSE4": "2026-10-12"
   },
   "sources": {
     "00757": "TWSE STOCK_DAY_ALL",
     "DSE11": "https://pscnetsecrwd.moneydj.com/w/wr/wr02.djhtm?a=ACDD04-A210003A",
-    "JFE15": "https://tw.finance.yahoo.com/fund/F0GBR05VVS%3AFO/history"
+    "JFE15": "https://tw.finance.yahoo.com/fund/F0GBR05VVS%3AFO/history",
+    "DSE4": "https://mmafund.sinopac.com/w/wr/wr02.djhtm?a=ACDD01-TT1"
   },
-  "status": "00757 成功：2026-10-08，146.75；DSE11 成功：2026-10-12，855.86；DSE4 失敗，保留原值：基金名稱或級別驗證失敗；JFE15 成功：2026-10-09，158.83；USD/TWD 成功：2026-10-12，31.96443",
+  "status": "00757 成功：2026-10-08，146.75；DSE11 成功：2026-10-12，855.86；DSE4 成功：2026-10-12，348.54；JFE15 成功：2026-10-09，158.83；USD/TWD 成功：2026-10-12，31.96443",
   "funds": {
     "DSE11": {
       "name": "安聯台灣科技基金",
