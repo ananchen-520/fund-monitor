@@ -1,10 +1,15 @@
-"""Daily fund quote updater. Standard library only; preserves last good quotes on errors."""
+"""Update fund-monitor/quotes.json. Python standard library only.
+
+Each source is checked independently. A green GitHub Action means the script ran,
+not necessarily that all quotes were refreshed: inspect quotes.json -> status.
+"""
 import datetime as dt
 import html
 import json
 import pathlib
 import re
 import urllib.request
+from html.parser import HTMLParser
 
 FILE = pathlib.Path(__file__).with_name('quotes.json')
 TZ = dt.timezone(dt.timedelta(hours=8))
@@ -15,83 +20,139 @@ dates = dict(old.get('priceDates') or {})
 sources = dict(old.get('sources') or {})
 funds = dict(old.get('funds') or {})
 funds.update({
- 'DSE11': {'name':'安聯台灣科技基金','isin':'TW000T3604Y3','currency':'TWD','quoteStatus':'automatic_public_NAV'},
- 'DSE4': {'name':'安聯台灣大壩基金-A類型-新臺幣','isin':'TW000T3601Y9','currency':'TWD','quoteStatus':'automatic_public_NAV'},
- 'JFE15': {'name':'摩根美國科技基金 A(acc) USD','isin':'LU0210536867','currency':'USD','quoteStatus':'automatic_public_NAV'},
- '00757': {'name':'統一NYSE FANG+ ETF','currency':'TWD','quoteStatus':'TWSE_automatic'},
+    'DSE11': {'name': '安聯台灣科技基金', 'isin': 'TW000T3604Y3', 'currency': 'TWD', 'quoteStatus': 'automatic_public_NAV'},
+    'DSE4': {'name': '安聯台灣大壩基金-A類型-新臺幣', 'isin': 'TW000T3601Y9', 'currency': 'TWD', 'quoteStatus': 'automatic_public_NAV'},
+    'JFE15': {'name': '摩根美國科技基金 A(acc) USD', 'isin': 'LU0210536867', 'currency': 'USD', 'quoteStatus': 'automatic_public_NAV'},
+    '00757': {'name': '統一NYSE FANG+ ETF', 'currency': 'TWD', 'quoteStatus': 'TWSE_automatic'},
 })
-messages=[]
-updated_at=old.get('updatedAt','')
+messages = []
+updated_at = old.get('updatedAt', '')
+
+class TextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+        self.skip = 0
+    def handle_starttag(self, tag, attrs):
+        if tag in ('script', 'style'):
+            self.skip += 1
+        if tag in ('td', 'th', 'tr', 'div', 'p', 'li', 'h1', 'h2', 'h3', 'br'):
+            self.parts.append(' ')
+    def handle_endtag(self, tag):
+        if tag in ('script', 'style') and self.skip:
+            self.skip -= 1
+        self.parts.append(' ')
+    def handle_data(self, data):
+        if not self.skip:
+            self.parts.append(data)
 
 def get(url):
- req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; FundMonitor/1.0)','Accept':'text/html,application/json'})
- with urllib.request.urlopen(req,timeout=25) as r:
-  return r.read().decode('utf-8','replace')
+    req = urllib.request.Request(url, headers={
+        'User-Agent': 'Mozilla/5.0 (compatible; PersonalFundMonitor/1.1)',
+        'Accept': 'text/html,application/json,*/*',
+        'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.7',
+    })
+    with urllib.request.urlopen(req, timeout=25) as response:
+        raw = response.read()
+        charset = response.headers.get_content_charset()
+    for encoding in [charset, 'utf-8', 'big5', 'cp950']:
+        if not encoding:
+            continue
+        try:
+            decoded = raw.decode(encoding)
+            if '\ufffd' not in decoded:
+                return decoded
+        except (UnicodeError, LookupError):
+            pass
+    return raw.decode('utf-8', errors='replace')
 
 def accept(code, day, value, source):
- global updated_at
- day=dt.date.fromisoformat(day)
- if day>NOW.date() or day < NOW.date()-dt.timedelta(days=20):
-  raise ValueError('報價日期不合理：'+str(day))
- if not (0 < value < 1000000):
-  raise ValueError('淨值不合理')
- if dates.get(code) and str(day)<dates[code]:
-  raise ValueError('來源比現有報價舊')
- prices[code]=round(value,6)
- dates[code]=str(day)
- sources[code]=source
- updated_at=NOW.isoformat(timespec='seconds')
- messages.append(f'{code} 更新成功：{day}，{value}')
+    global updated_at
+    day = dt.date.fromisoformat(day)
+    if day > NOW.date() or day < NOW.date() - dt.timedelta(days=20):
+        raise ValueError('報價日期超出允許範圍：' + str(day))
+    if not 0 < value < 1000000:
+        raise ValueError('報價數值不合理')
+    if dates.get(code) and str(day) < dates[code]:
+        raise ValueError('新來源日期比已儲存資料舊')
+    prices[code] = round(value, 6)
+    dates[code] = str(day)
+    sources[code] = source
+    updated_at = NOW.isoformat(timespec='seconds')
+    messages.append(f'{code} 成功：{day}，{value}')
 
-def fund_nav(code,url,expected_name):
- raw=get(url)
- # Convert HTML into readable text, retaining table cell boundaries.
- raw=re.sub(r'<(script|style)\b[^>]*>.*?</\1>',' ',raw,flags=re.I|re.S)
- raw=re.sub(r'<[^>]+>',' ',raw)
- plain=html.unescape(re.sub(r'\s+',' ',raw))
- if expected_name not in plain:
-  raise ValueError('基金名稱驗證失敗，拒絕更新')
- # First NAV history row: date and NAV (other text may intervene).
- match=re.search(r'(20\d\d[/-]\d{1,2}[/-]\d{1,2})\s+([\d,]+(?:\.\d+)?)',plain)
- if not match:
-  raise ValueError('無法辨識淨值表日期與價格')
- day=match.group(1).replace('/','-')
- y,m,d=map(int,day.split('-'))
- accept(code,f'{y:04d}-{m:02d}-{d:02d}',float(match.group(2).replace(',','')),url)
+def parse_nav(code, url, identity, section):
+    page = get(url)
+    parser = TextExtractor()
+    parser.feed(page)
+    plain = html.unescape(re.sub(r'\s+', ' ', ''.join(parser.parts))).strip()
+    # Verify exact fund identity and share class before using any numbers.
+    if not all(re.search(term, plain, re.I) for term in identity):
+        raise ValueError('基金名稱或級別驗證失敗')
+    position = plain.find(section)
+    if position < 0:
+        raise ValueError('找不到淨值歷史區塊')
+    tail = plain[position:position + 3500]
+    # Historical NAV table: first YYYY/MM/DD followed by NAV.
+    m = re.search(r'(20\d{2})[/-](\d{1,2})[/-](\d{1,2})\s+([\d,]+(?:\.\d+)?)', tail)
+    if not m:
+        raise ValueError('淨值歷史表格式不符')
+    y, mo, d, nav = m.groups()
+    accept(code, f'{int(y):04d}-{int(mo):02d}-{int(d):02d}', float(nav.replace(',', '')), url)
 
 try:
- rows=json.loads(get('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'))
- row=next(r for r in rows if r.get('Code')=='00757')
- rawdate=str(row['Date']).strip()
- if not re.fullmatch(r'\d{7}',rawdate):raise ValueError('台股日期格式異常')
- day=f'{int(rawdate[:3])+1911:04d}-{rawdate[3:5]}-{rawdate[5:]}'
- accept('00757',day,float(str(row['ClosingPrice']).replace(',','')),'TWSE STOCK_DAY_ALL')
-except Exception as e:messages.append('00757 失敗，保留原值：'+str(e))
+    rows = json.loads(get('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'))
+    row = next(r for r in rows if r.get('Code') == '00757')
+    rawdate = str(row['Date']).strip()
+    if not re.fullmatch(r'\d{7}', rawdate):
+        raise ValueError('TWSE 日期格式異常')
+    day = f'{int(rawdate[:3]) + 1911:04d}-{rawdate[3:5]}-{rawdate[5:]}'
+    accept('00757', day, float(str(row['ClosingPrice']).replace(',', '')), 'TWSE STOCK_DAY_ALL')
+except Exception as e:
+    messages.append('00757 失敗，保留原值：' + str(e))
 
-for code,url,name in [
- ('DSE11','https://fund.hncb.com.tw/w/wr/wr02.djhtm?a=ACDD04-DSE11','安聯台灣科技'),
- ('DSE4','https://fund.hncb.com.tw/w/wr/wr02.djhtm?a=ACDD01-DSE4','安聯台灣大壩'),
- ('JFE15','https://fund.hncb.com.tw/w/wb/wb02.djhtm?a=JFZG4-01H9','摩根基金-美國科技基金A股'),
-]:
- try:fund_nav(code,url,name)
- except Exception as e:messages.append(f'{code} 失敗，保留原值：{e}')
+# Correct share-class-specific fund pages, not bank-internal DSE/JFE identifiers.
+fund_pages = [
+    ('DSE11', 'https://pscnetsecrwd.moneydj.com/w/wr/wr02.djhtm?a=ACDD04-A210003A',
+     [r'安聯台灣科技基金'], '近30日淨值'),
+    ('DSE4', 'https://fglife.moneydj.com/w/wr/wr02.djhtm?a=ACDD01-NTDEQ0003',
+     [r'安聯台灣大壩基金', r'A類型', r'新臺幣'], '近90日淨值'),
+    ('JFE15', 'https://tw.finance.yahoo.com/fund/F0GBR05VVS%3AFO/history',
+     [r'摩根', r'美國科技', r'A股', r'累計'], '30天歷史報價'),
+]
+for code, url, identity, section in fund_pages:
+    try:
+        parse_nav(code, url, identity, section)
+    except Exception as e:
+        messages.append(f'{code} 失敗，保留原值：{e}')
 
-# FX: Frankfurter's reference USD/TWD rate, dated and independently checked.
-fx=old.get('fx')
+fx = old.get('fx')
 try:
- data=json.loads(get('https://api.frankfurter.dev/v1/latest?base=USD&symbols=TWD'))
- rate=float(data['rates']['TWD'])
- day=dt.date.fromisoformat(data['date'])
- if not 15<rate<50 or day>NOW.date() or day<NOW.date()-dt.timedelta(days=10):
-  raise ValueError('匯率或日期不合理')
- fx=rate
- old['fxDate']=str(day)
- old['fxSource']='Frankfurter (reference rate)'
- messages.append(f'USD/TWD 更新成功：{day}，{rate}')
-except Exception as e:messages.append('USD/TWD 失敗，保留原值：'+str(e))
+    data = json.loads(get('https://open.er-api.com/v6/latest/USD'))
+    if data.get('result') != 'success' or data.get('base_code') != 'USD':
+        raise ValueError('匯率回傳狀態或幣別異常')
+    rate = float(data['rates']['TWD'])
+    day = dt.datetime.fromtimestamp(int(data['time_last_update_unix']), TZ).date()
+    if not 15 < rate < 50 or day > NOW.date() or day < NOW.date() - dt.timedelta(days=10):
+        raise ValueError('匯率或日期不合理')
+    fx = round(rate, 6)
+    old['fxDate'] = str(day)
+    old['fxSource'] = 'ExchangeRate-API open access (reference rate)'
+    messages.append(f'USD/TWD 成功：{day}，{rate}')
+except Exception as e:
+    messages.append('USD/TWD 失敗，保留原值：' + str(e))
 
-result=dict(old)
-result.update({'updatedAt':updated_at,'checkedAt':NOW.isoformat(timespec='seconds'),'prices':prices,'priceDates':dates,'sources':sources,'funds':funds,'status':'；'.join(messages)})
-if fx is not None:result['fx']=fx
-FILE.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+result = dict(old)
+result.update({
+    'updatedAt': updated_at,
+    'checkedAt': NOW.isoformat(timespec='seconds'),
+    'prices': prices,
+    'priceDates': dates,
+    'sources': sources,
+    'funds': funds,
+    'status': '；'.join(messages),
+})
+if fx is not None:
+    result['fx'] = fx
+FILE.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 print(result['status'])
