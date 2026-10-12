@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-10-12T21:16:49+08:00",
-  "checkedAt": "2026-10-12T21:16:49+08:00",
+  "updatedAt": "2026-10-12T21:25:21+08:00",
+  "checkedAt": "2026-10-12T21:25:21+08:00",
   "prices": {
     "00757": 146.75
   },
@@ -10,5 +10,29 @@
   "sources": {
     "00757": "TWSE STOCK_DAY_ALL"
   },
-  "status": "00757 更新成功：2026-10-08，NT$ 146.75；其他三檔基金尚未串接。"
+  "status": "00757 更新成功：2026-10-08，NT$ 146.75；DSE11、DSE4 已登錄基金身分，尚未啟用自動淨值抓取；JFE15 待核對級別",
+  "funds": {
+    "DSE11": {
+      "name": "安聯台灣科技基金",
+      "isin": "TW000T3604Y3",
+      "currency": "TWD",
+      "quoteStatus": "awaiting_verified_automatic_source"
+    },
+    "DSE4": {
+      "name": "安聯台灣大壩基金-A類型-新臺幣",
+      "isin": "TW000T3601Y9",
+      "currency": "TWD",
+      "quoteStatus": "awaiting_verified_automatic_source"
+    },
+    "JFE15": {
+      "name": "摩根美國科技基金（級別待確認）",
+      "currency": "USD",
+      "quoteStatus": "awaiting_share_class_verification"
+    },
+    "00757": {
+      "name": "統一NYSE FANG+ ETF",
+      "currency": "TWD",
+      "quoteStatus": "TWSE_automatic"
+    }
+  }
 }
