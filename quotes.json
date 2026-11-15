@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-11-15T02:43:39+08:00",
-  "checkedAt": "2026-11-15T02:43:39+08:00",
+  "updatedAt": "2026-11-16T03:22:15+08:00",
+  "checkedAt": "2026-11-16T03:22:15+08:00",
   "prices": {
     "00757": 135.4,
     "DSE11": 677.37,
@@ -19,7 +19,7 @@
     "JFE15": "https://tw.finance.yahoo.com/fund/F0GBR05VVS%3AFO/history",
     "DSE4": "https://mmafund.sinopac.com/w/wr/wr02.djhtm?a=ACDD01-TT1"
   },
-  "status": "00757 成功：2026-11-13，135.4；DSE11 成功：2026-11-13，677.37；DSE4 成功：2026-11-13，274.72；JFE15 成功：2026-11-13，134.47；USD/TWD 成功：2026-11-14，32.913996",
+  "status": "00757 成功：2026-11-13，135.4；DSE11 成功：2026-11-13，677.37；DSE4 成功：2026-11-13，274.72；JFE15 成功：2026-11-13，134.47；USD/TWD 成功：2026-11-15，32.915595",
   "funds": {
     "DSE11": {
       "name": "安聯台灣科技基金",
@@ -45,7 +45,7 @@
       "quoteStatus": "TWSE_automatic"
     }
   },
-  "fxDate": "2026-11-14",
+  "fxDate": "2026-11-15",
   "fxSource": "ExchangeRate-API open access (reference rate)",
-  "fx": 32.913996
+  "fx": 32.915595
 }
